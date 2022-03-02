@@ -6,11 +6,11 @@ import os.path
 import os
 from pathlib import Path
 import sys
-#sys.tracebacklimit = 0
+sys.tracebacklimit = 0
 
 
 @st.cache
-def get_clients(headers):
+def get_clients(headers, url):
     """ 
     Renvoit une liste de dictionnaires de type:
     {
@@ -18,7 +18,6 @@ def get_clients(headers):
     "siren": "453416687"
     }
     """
-    url = "https://jefacture.nomadeskpartner.com/comapi/v1/enterprise"
     r = requests.get(url, headers=headers)
 
     r.raise_for_status()
@@ -31,7 +30,7 @@ def get_clients(headers):
     return content
 
 #@st.cache
-def get_files(client, invoice_type, headers):
+def get_files(client, invoice_type, headers, url):
     """
     client: le SIREN
     invoice_type: AP ou AR
@@ -47,9 +46,9 @@ def get_files(client, invoice_type, headers):
     """
     content = []
     for status in ['Transfer', 'Archived']:
-        url = "https://jefacture.nomadeskpartner.com/comapi/v1/invoice/" + client + "/" + invoice_type + "/" + status
+        request_url = url + "/v1/invoice/" + client + "/" + invoice_type + "/" + status
         #print('url: ', url)
-        r = requests.get(url, headers=headers)
+        r = requests.get(request_url, headers=headers)
         #print(r.status_code)
         assert r.status_code == 200
         content += json.loads(r.content)
@@ -73,12 +72,17 @@ def save_file(binary_pdf, path):
 
 environnement = st.sidebar.radio("Environnement", ['UAT', 'PROD'])
 
+if environnement == 'UAT':
+    url = "https://jefacture.nomadeskpartner.com/comapi/v1/enterprise"
+else:
+    url = "https://fichiers.jefacture.com/comapi/"
+
 ApiKeyAuth = st.sidebar.text_input("ApiKeyAuth", value="")
 SoftwareID = st.sidebar.text_input("SoftwareID", value="")
 
 headers= { 'X-SOFTWARE-ID': SoftwareID, 'X-API-KEY' : ApiKeyAuth}
 
-clients = get_clients(headers)
+clients = get_clients(headers, url)
 siren_dict = {}
 name_dict = {}
 for client in clients:
@@ -149,7 +153,7 @@ if st.button("Lancer la requète", disabled=sirens==[]):
     for siren in sirens:
         print(siren_ap_ar_dict[siren])
         if siren_ap_ar_dict[siren][0]:
-            files_json = get_files(siren, 'AP', headers)
+            files_json = get_files(siren, 'AP', headers, url)
 
             path = Path(path_str) / siren / 'AP'
             os.makedirs(path, exist_ok=True)
@@ -164,7 +168,7 @@ if st.button("Lancer la requète", disabled=sirens==[]):
 
 
         if siren_ap_ar_dict[siren][1]:
-            files_json = get_files(siren, 'AR', headers)
+            files_json = get_files(siren, 'AR', headers, url)
             for file in files_json:
                 pdf = download_file(file['downloadurl'], headers)
                 path = Path(path_str) / siren / 'AR'
