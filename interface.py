@@ -92,32 +92,35 @@ SoftwareID = st.sidebar.text_input("SoftwareID", value="")
 headers= { 'X-SOFTWARE-ID': SoftwareID, 'X-API-KEY' : ApiKeyAuth}
 
 clients = get_clients(headers, url) #On récupère les clients du cabinet
-siren_dict = {} # 
-name_dict = {}
+
+siren_list = [] # Liste des sirens
+name_dict = {} # Disctionnaire qui associe un nom a son siren respectif
 for client in clients:
     name = client['name']
     siren = client['siren']
 
-    siren_dict[name] = siren
+    siren_list.append(siren)
     name_dict[siren] = name
-
-siren_list = list(siren_dict.values()) # On récupère la liste des sirens
 
 name_col, siren_col = st.columns(2)
 
-if 'index' not in globals(): #la variable n'existe pas
+if 'index' not in globals(): #si la variable n'existe pas..
     index = 0
 
-if 'index' not in st.session_state:
+if 'index' not in st.session_state: # idem, mais pour les variables internes de Streamlit
 	st.session_state.index = 0
 
-sirens = st.multiselect("Sirens", siren_list, key="sirens")
+sirens = st.multiselect("Sirens", siren_list, key="sirens") # On peut choisit des siens parmi la liste
 
-siren_col, descr_col, ap_col, ar_col = st.columns([2, 5, 1, 1])
+siren_col, descr_col, ap_col, ar_col = st.columns([2, 5, 1, 1]) # On fait des colonnes de différentes tailles, pour que ca soit jolie
 
-if 'siren_ap_ar_dict' not in globals(): #la variable n'existe pas
+# Le dictionnaire 'siren_ap_ar_dict' associe une liste de deux booléens à chaque siren séléctionné.
+# Le premier est vrai si on a coché AP, le second si on a coché AR
+
+if 'siren_ap_ar_dict' not in globals(): # si la variable n'existe pas..
     siren_ap_ar_dict = {}
 
+# Les titres du tableau
 with siren_col:
     st.subheader("Siren")
 
@@ -130,11 +133,12 @@ with ap_col:
 with ar_col:
     st.subheader("AR")
 
+# On trie les sirens
 sirens = sorted(sirens)
 
 for siren in sirens:
     if siren not in siren_ap_ar_dict.keys():
-        siren_ap_ar_dict[siren] = [True, True]
+        siren_ap_ar_dict[siren] = [True, True] # AP et AR sont cochés par defaut
 
     with siren_col:
         st.text(siren)
@@ -144,24 +148,25 @@ for siren in sirens:
 
     with ap_col:
         siren_ap_ar_dict[siren][0] = st.checkbox("", value=siren_ap_ar_dict[siren][0], key="ap_"+str(siren))
+        # Si la case est cochée, on change la valeur du dictionnaire
 
     with ar_col:
         siren_ap_ar_dict[siren][1] = st.checkbox("", value=siren_ap_ar_dict[siren][1], key="ar_"+str(siren))
+        # Si la case est cochée, on change la valeur du dictionnaire
 
-default_path = Path(__file__).parent.resolve()
-path_str = st.text_input("Chemin du dossier de synchronisation", value=default_path)
-
-
+default_path = Path(__file__).parent.resolve() # le chemin par defaut de sauvegarde des factures sela celui ou se trouve ce programme
+path_str = st.text_input("Chemin du dossier de synchronisation", value=default_path) # Il est néamoins possible de le changer
 
 if st.button("Lancer la requète", disabled=sirens==[]):
+    # On ajoute une bar de progression
     my_bar = st.progress(0.0)
     frac_progress = 1.0 / len(sirens)
     percent_complete = 0.0
 
     for siren in sirens:
-        print(siren_ap_ar_dict[siren])
-        if siren_ap_ar_dict[siren][0]:
-            files_json = get_files(siren, 'AP', headers, url)
+
+        if siren_ap_ar_dict[siren][0]: # AP est coché
+            files_json = get_files(siren, 'AP', headers, url) # On récupère la liste des fichiers
 
             path = Path(path_str) / siren / 'AP'
             os.makedirs(path, exist_ok=True)
@@ -169,22 +174,25 @@ if st.button("Lancer la requète", disabled=sirens==[]):
             for file in files_json:
                 file_path = path / file['name']
 
-                if not os.path.exists(file_path):
-                    pdf = download_file(file['downloadurl'], headers)
+                if not os.path.exists(file_path): # Si le fichier n'existe pas déjà
+                    pdf = download_file(file['downloadurl'], headers) # On télécharge
     
-                    save_file(pdf, file_path)
+                    save_file(pdf, file_path) # On sauvegarde
 
 
-        if siren_ap_ar_dict[siren][1]:
-            files_json = get_files(siren, 'AR', headers, url)
+        if siren_ap_ar_dict[siren][1]: # AR est coché
+            files_json = get_files(siren, 'AR', headers, url) # On récupère la liste des fichiers
+            
             for file in files_json:
                 pdf = download_file(file['downloadurl'], headers)
                 path = Path(path_str) / siren / 'AR'
                 os.makedirs(path, exist_ok=True)
+
                 save_file(pdf, path / file['name'])
 
         percent_complete += frac_progress
         my_bar.progress(min(percent_complete, 1.0))
+        
     my_bar.progress(1.0)
 
 
